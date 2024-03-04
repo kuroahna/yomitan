@@ -27,6 +27,10 @@ export class API {
         this._webExtension = webExtension;
     }
 
+    getNoteIdsByQuery(query) {
+        return this._invoke('getNoteIdsByQuery', {query});
+    }
+
     /**
      * @param {import('api').ApiParam<'optionsGet', 'optionsContext'>} optionsContext
      * @returns {Promise<import('api').ApiReturn<'optionsGet'>>}

@@ -258,7 +258,7 @@ export class DisplayAnki {
 
     /** */
     _onContentUpdateComplete() {
-        void this._updateDictionaryEntryDetails();
+        // void this._updateDictionaryEntryDetails();
     }
 
     /**
@@ -454,20 +454,15 @@ export class DisplayAnki {
      */
     async _addAnkiNote(dictionaryEntryIndex, mode) {
         const dictionaryEntries = this._display.dictionaryEntries;
-        const dictionaryEntryDetails = this._dictionaryEntryDetails;
         if (!(
-            dictionaryEntryDetails !== null &&
             dictionaryEntryIndex >= 0 &&
-            dictionaryEntryIndex < dictionaryEntries.length &&
-            dictionaryEntryIndex < dictionaryEntryDetails.length
+            dictionaryEntryIndex < dictionaryEntries.length
         )) {
             return;
         }
         const dictionaryEntry = dictionaryEntries[dictionaryEntryIndex];
-        const details = dictionaryEntryDetails[dictionaryEntryIndex].modeMap.get(mode);
-        if (typeof details === 'undefined') { return; }
 
-        const {requirements} = details;
+        const {requirements} = await this._createNote(dictionaryEntry, mode, []);
 
         const button = this._adderButtonFind(dictionaryEntryIndex, mode);
         if (button === null || button.disabled) { return; }

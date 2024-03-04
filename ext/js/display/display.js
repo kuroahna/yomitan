@@ -186,6 +186,10 @@ export class Display extends EventDispatcher {
         this._onMenuButtonMenuCloseBind = this._onMenuButtonMenuClose.bind(this);
         /** @type {ThemeController} */
         this._themeController = new ThemeController(document.documentElement);
+        this._dictionaryEntryTypeModeMap = new Map([
+            ['kanji', ['kanji']],
+            ['term', ['term-kanji', 'term-kana']]
+        ]);
 
         /* eslint-disable @stylistic/no-multi-spaces */
         this._hotkeyHandler.registerActions([
@@ -1156,6 +1160,113 @@ export class Display extends EventDispatcher {
         }
     }
 
+    _adderButtonFind(entry, mode) {
+        return entry !== null ? entry.querySelector(`.action-button[data-action=add-note][data-mode="${mode}"]`) : null;
+    }
+
+    async _updateAdderButtons(dictionaryEntry, entry) {
+        const modes = this._dictionaryEntryTypeModeMap.get(dictionaryEntry.type);
+        for (const mode of modes) {
+            const adderButton = this._adderButtonFind(entry, mode);
+            if (adderButton === null) {
+                log.error(`Failed to update adder button because adder button could not be found for the mode '${mode}'`);
+                continue;
+            }
+
+            if (mode === "kanji") {
+                if (dictionaryEntry.character === undefined) {
+                    log.error(`Failed to update adder button because dictionaryEntry.character is missing`);
+                    continue;
+                }
+                const noteIds = await this._application.api.getNoteIdsByQuery(dictionaryEntry.character);
+                const canAdd = Array.isArray(noteIds) && noteIds.length <= 0;
+
+                adderButton.disabled = !canAdd;
+                adderButton.hidden = false;
+                continue;
+            }
+
+            // mode should be "term-kanji" or "term-kana" now
+
+            // headwords is a list because if you set the result grouping mode to "Group related terms", then it will have multiple
+            // But since we're using Group term-reading pairs, there will only ever be one headword
+            let canAdd = false;
+            for (const headword of dictionaryEntry.headwords) {
+                if (mode === "term-kanji") {
+                    if (headword.term === undefined) {
+                        log.error(`Failed to update adder button because headword.term is missing`);
+                        continue;
+                    }
+                    const noteIds = await this._application.api.getNoteIdsByQuery(headword.term);
+                    canAdd = Array.isArray(noteIds) && noteIds.length <= 0;
+                    break;
+                } else if (mode === "term-kana") {
+                    if (headword.reading === undefined) {
+                        log.error(`Failed to update adder button because headword.reading is missing`);
+                        continue;
+                    }
+                    const noteIds = await this._application.api.getNoteIdsByQuery(headword.reading);
+                    canAdd = Array.isArray(noteIds) && noteIds.length <= 0;
+                    break;
+                } else {
+                    log.error(`Failed to update adder button because an unknown mode has been found '${mode}'`);
+                }
+            }
+
+            adderButton.disabled = !canAdd;
+            adderButton.hidden = false;
+        }
+    }
+
+    _getViewNoteButton(entry) {
+        return entry !== null ? entry.querySelector('.action-button[data-action=view-note]') : null;
+    }
+
+    async _updateViewNoteButton(dictionaryEntry, entry) {
+        const button = this._getViewNoteButton(entry);
+        if (button === null) { return; }
+
+        let noteIds = [];
+        if (dictionaryEntry.type === "kanji") {
+            if (dictionaryEntry.character === undefined) {
+                log.error(`Failed to update view note button because dictionaryEntry.character is missing`);
+            } else {
+                noteIds = await this._application.api.getNoteIdsByQuery(dictionaryEntry.character);
+            }
+        } else if (dictionaryEntry.type === "term") {
+            // headwords is a list because if you set the result grouping mode to "Group related terms", then it will have multiple
+            // But since we're using Group term-reading pairs, there will only ever be one headword
+            for (const headword of dictionaryEntry.headwords) {
+                if (headword.term === undefined) {
+                    log.error(`Failed to update view note button because headword.term is missing`);
+                    continue;
+                }
+                noteIds = await this._application.api.getNoteIdsByQuery(headword.term);
+                break;
+            }
+        } else {
+            log.error(`Failed to update view note button because dictionaryEntry.type '${dictionaryEntry.type}' is unknown`);
+        }
+
+        const disabled = (noteIds.length === 0);
+        button.disabled = disabled;
+        button.hidden = disabled;
+        button.dataset.noteIds = noteIds.join(' ');
+
+        const badge = button.querySelector('.action-button-badge');
+        if (badge !== null) {
+            const badgeData = badge.dataset;
+            if (noteIds.length > 1) {
+                badgeData.icon = 'plus-thick';
+                badgeData.hidden = false;
+            } else {
+                delete badgeData.icon;
+                badgeData.hidden = true;
+            }
+        }
+    }
+
+
     /**
      * @param {string} type
      * @param {URLSearchParams} urlSearchParams
@@ -1255,6 +1366,8 @@ export class Display extends EventDispatcher {
                 this._displayGenerator.createKanjiEntry(dictionaryEntry)
             );
             entry.dataset.index = `${i}`;
+            this._updateAdderButtons(dictionaryEntry, entry);
+            this._updateViewNoteButton(dictionaryEntry, entry);
             this._dictionaryEntryNodes.push(entry);
             this._addEntryEventListeners(entry);
             this._triggerContentUpdateEntry(dictionaryEntry, entry, i);

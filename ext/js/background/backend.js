@@ -136,9 +136,12 @@ export class Backend {
         /** @type {Map<string, (() => void)[]>} */
         this._applicationReadyHandlers = new Map();
 
+        this._queryToNoteIds = new Map();
+
         /* eslint-disable @stylistic/no-multi-spaces */
         /** @type {import('api').ApiMap} */
         this._apiMap = createApiMap([
+            ['getNoteIdsByQuery',            this._onApiGetNoteIdsByQuery.bind(this)],
             ['applicationReady',             this._onApiApplicationReady.bind(this)],
             ['requestBackendReadySignal',    this._onApiRequestBackendReadySignal.bind(this)],
             ['optionsGet',                   this._onApiOptionsGet.bind(this)],
@@ -219,6 +222,34 @@ export class Backend {
 
     // Private
 
+    _addToCache(query, noteId) {
+        let noteIds = this._queryToNoteIds.get(query);
+        if (noteIds === undefined) {
+            noteIds = new Set();
+            this._queryToNoteIds.set(query, noteIds);
+        }
+        noteIds.add(noteId);
+    }
+
+    _removeFromCache(query, noteId) {
+        const noteIds = this._queryToNoteIds.get(query);
+        if (noteIds === undefined) {
+            return;
+        }
+        noteIds.delete(noteId);
+        if (noteIds.size === 0) {
+            this._queryToNoteIds.delete(query);
+        }
+    }
+
+    _onApiGetNoteIdsByQuery({query}) {
+        const noteIds = this._queryToNoteIds.get(query);
+        if (noteIds === undefined) {
+            return [];
+        }
+        return Array.from(noteIds);
+    }
+
     /**
      * @returns {void}
      */
@@ -298,6 +329,18 @@ export class Backend {
             }
 
             this._clipboardMonitor.on('change', this._onClipboardTextChange.bind(this));
+
+            const eventSource = new EventSource("http://127.0.0.1:12345");
+            eventSource.addEventListener("message", (event) => {
+                const changeEvent = JSON.parse(event.data);
+                if (changeEvent.type === "add") {
+                    this._addToCache(changeEvent.query, changeEvent.noteId);
+                } else if (changeEvent.type === "remove") {
+                    this._removeFromCache(changeEvent.query, changeEvent.noteId);
+                } else {
+                    log.error(`Received unknown type from eventSource: ${changeEvent.type}`);
+                }
+            });
 
             this._sendMessageAllTabsIgnoreResponse({action: 'applicationBackendReady'});
             this._sendMessageIgnoreResponse({action: 'applicationBackendReady'});
