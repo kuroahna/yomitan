@@ -17,6 +17,7 @@
  */
 
 import {getFileExtensionFromImageMediaType} from '../media/media-util.js';
+import wasm_init, { data_url_to_base64_jpg } from '../wasm/image_processor/image_processor.js';
 
 /**
  * Class which can read text and images from the clipboard.
@@ -134,7 +135,9 @@ export class ClipboardReader {
                     if (!getFileExtensionFromImageMediaType(type)) { continue; }
                     try {
                         const blob = await item.getType(type);
-                        return await this._readFileAsDataURL(blob);
+                        const data_url = await this._readFileAsDataURL(blob);
+                        await wasm_init();
+                        return data_url_to_base64_jpg(data_url, 80);
                     } catch (e) {
                         // NOP
                     }
@@ -154,7 +157,8 @@ export class ClipboardReader {
         const image = target.querySelector('img[src^="data:"]');
         const result = (image !== null ? image.getAttribute('src') : null);
         this._clearRichContent(target);
-        return result;
+        await wasm_init();
+        return data_url_to_base64_jpg(result, 80);
     }
 
     // Private
