@@ -38,6 +38,8 @@ export function getImageMediaTypeFromFileName(path) {
     switch (getFileNameExtension(path).toLowerCase()) {
         case '.apng':
             return 'image/apng';
+        case '.avif':
+            return 'image/avif';
         case '.bmp':
             return 'image/bmp';
         case '.gif':
